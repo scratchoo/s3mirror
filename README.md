@@ -1,8 +1,6 @@
 # S3mirror
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/s3mirror`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+S3mirror is a very simple class that help you mirror uploaded files to other s3-compatible services, let's say for example your main file storage is AWS S3 and you want each time you upload a file to mirror that file to another S3-compatible storage like Digital Ocean Spaces, this gem will help you do that!
 
 ## Installation
 
@@ -16,26 +14,91 @@ And then execute:
 
     $ bundle install
 
-Or install it yourself as:
-
-    $ gem install s3mirror
 
 ## Usage
 
-TODO: Write usage instructions here
+First create an initializer file in config/initializers/s3mirror.rb
 
-## Development
+```
+S3mirror::Mirror.configure do |config|
+  # temp_download_folder is optional: where the main file will be downloaded temporarily (by default the file to mirror will be downloaded to you rails app tmp folder)
+  # config.temp_download_folder = '/tmp'
 
-After checking out the repo, run `bin/setup` to install dependencies. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+  config.s3_main = { # primary s3 service details
+    region: ENV["AWS_REGION"],
+    endpoint: ENV["AWS_ENDPOINT"],
+    access_key_id: ENV["AWS_ACCESS_KEY_ID"],
+    secret_access_key: ENV["AWS_SECRET_ACCESS_KEY"],
+    bucket_name: ENV["AWS_BUCKET_NAME"]
+  }
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+  config.s3_mirrors = [ # mirrors s3 services details (at lest 1 mirror should be provided)
+    {
+      region: ENV["MIRROR1_REGION"],
+      endpoint: ENV["MIRROR1_ENDPOINT"],
+      access_key_id: ENV["MIRROR1_ACCESS_KEY_ID"],
+      secret_access_key: ENV["MIRROR1_SECRET_ACCESS_KEY"],
+      bucket_name: ENV["MIRROR1_BUCKET_NAME"]
+    },
+    {
+      region: ENV["MIRROR2_REGION"],
+      endpoint: ENV["MIRROR2_ENDPOINT"],
+      access_key_id: ENV["MIRROR2_ACCESS_KEY_ID"],
+      secret_access_key: ENV["MIRROR2_SECRET_ACCESS_KEY"],
+      bucket_name: ENV["MIRROR2_BUCKET_NAME"]
+    },
+    {
+      # YOU CAN SETUP MORE MIRRORS IF NEEDED
+    }
+  ]
+end
+
+```
+
+When you upload a file/image etc, just create an instance of S3mirror::Mirror and pass the object "key" to it by calling the method "mirror":
+
+```
+key = '123e4567-e89b-12d3-a456-426614174000/image.jpg' # key of the object you want to mirror
+
+s3mirror = S3mirror::Mirror.new()
+result = s3mirror.mirror(key)
+```
+
+Because S3mirror will download/upload your file(s) from/to third party s3 services, it's very recommended to call it within a background job
+
+```
+rails g job s3mirror
+```
+
+This will generate s3mirror_job.rb file under jobs folder:
+
+```
+class S3mirrorJob < ApplicationJob
+  queue_as :default
+
+  def perform(key)
+
+    s3mirror = S3mirror::Mirror.new()
+    result = s3mirror.mirror(key)
+
+    mirrored_now = result[:mirrored_now] # in case of retries, s3mirror will mirror only the failed ones, mirrored_now describe the count of successful mirrored files at a given request/try.
+
+    total_mirrored = result[:total_mirrored]
+
+    total_failed = result[:total_failed]
+
+    # do something with result (i.e: update database "mirrored field" to true once total_failed is 0)
+
+  end
+
+end
+```
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/s3mirror.
+Bug reports and pull requests are welcome on GitHub at https://github.com/scratchoo/s3mirror.
 
 
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
-# s3mirror
